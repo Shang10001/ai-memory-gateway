@@ -79,7 +79,7 @@ Give your AI long-term memory. A lightweight proxy gateway that adds a memory la
 
 在 Zeabur 中：添加服务 → Marketplace → PostgreSQL
 
-**2. 添加环境变量**
+**2. 在网关添加环境变量**
 
 | 环境变量 | 说明 | 示例 |
 |---------|------|------|
