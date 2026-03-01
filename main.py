@@ -131,7 +131,16 @@ async def build_system_prompt_with_memories(user_message: str) -> str:
         if not memories:
             return SYSTEM_PROMPT
         
-        memory_lines = [f"- {mem['content']}" for mem in memories]
+        # 格式化记忆文本（带日期，帮助模型判断新旧）
+        memory_lines = []
+        for mem in memories:
+            date_str = ""
+            if mem.get("created_at"):
+                try:
+                    date_str = f"[{str(mem['created_at'])[:10]}] "
+                except:
+                    pass
+            memory_lines.append(f"- {date_str}{mem['content']}")
         memory_text = "\n".join(memory_lines)
         
         enhanced_prompt = f"""{SYSTEM_PROMPT}
@@ -419,36 +428,6 @@ async def stream_and_capture(headers: dict, body: dict, session_id: str, user_me
 # 记忆管理接口
 # ============================================================
 
-@app.get("/debug/memories")
-async def debug_memories(q: str = "", limit: int = 20):
-    """查看和搜索记忆"""
-    if not MEMORY_ENABLED:
-        return {"error": "记忆系统未启用（设置 MEMORY_ENABLED=true 开启）"}
-    
-    try:
-        if q:
-            memories = await search_memories(q, limit=limit)
-        else:
-            from database import get_recent_memories
-            memories = await get_recent_memories(limit=limit)
-        
-        total = await get_all_memories_count()
-        
-        return {
-            "total_memories": total,
-            "query": q or "(最近记忆)",
-            "results": [
-                {
-                    "content": m["content"],
-                    "importance": m["importance"],
-                    "created_at": str(m["created_at"]),
-                }
-                for m in memories
-            ],
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
 
 @app.get("/import/seed-memories")
 async def import_seed_memories():
@@ -673,7 +652,13 @@ async def manage_memories_page():
 <div class="nav"><a href="/import/memories">→ 导入新记忆</a> ｜ <a href="/export/memories">→ 导出备份</a></div>
 
 <div class="toolbar">
-    <input type="text" id="searchBox" placeholder="搜索记忆..." oninput="filterTable()">
+    <input type="text" id="searchBox" placeholder="搜索记忆..." oninput="filterAndSort()">
+    <select id="sortSelect" onchange="filterAndSort()" style="padding:8px 12px;font-size:14px;border:1px solid #ddd;border-radius:4px;">
+        <option value="id-desc">ID 从新到旧</option>
+        <option value="id-asc">ID 从旧到新</option>
+        <option value="imp-desc">权重 从高到低</option>
+        <option value="imp-asc">权重 从低到高</option>
+    </select>
     <button class="btn-green" onclick="batchSave()">批量保存全部</button>
     <button class="btn-red" onclick="batchDelete()">批量删除选中</button>
     <label style="font-size:13px;color:#666;cursor:pointer;"><input type="checkbox" id="selectAll" onchange="toggleAll()"> 全选</label>
@@ -703,7 +688,7 @@ async function loadMemories() {
         const data = await resp.json();
         allMemories = data.memories || [];
         document.getElementById('stats').textContent = '共 ' + allMemories.length + ' 条记忆';
-        renderTable(allMemories);
+        filterAndSort();
     } catch(e) { showMsg('err', '加载失败：' + e.message); }
 }
 
@@ -721,12 +706,22 @@ function renderTable(mems) {
 
 function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-function filterTable() {
+function filterAndSort() {
     const q = document.getElementById('searchBox').value.trim().toLowerCase();
-    if (!q) { renderTable(allMemories); return; }
-    const filtered = allMemories.filter(m => m.content.toLowerCase().includes(q));
-    renderTable(filtered);
-    document.getElementById('stats').textContent = '搜索到 ' + filtered.length + ' / ' + allMemories.length + ' 条';
+    const sort = document.getElementById('sortSelect').value;
+    let mems = allMemories;
+    if (q) {
+        mems = mems.filter(m => m.content.toLowerCase().includes(q));
+    }
+    mems = [...mems].sort((a, b) => {
+        if (sort === 'id-desc') return b.id - a.id;
+        if (sort === 'id-asc') return a.id - b.id;
+        if (sort === 'imp-desc') return b.importance - a.importance || b.id - a.id;
+        if (sort === 'imp-asc') return a.importance - b.importance || a.id - b.id;
+        return 0;
+    });
+    renderTable(mems);
+    if (q) document.getElementById('stats').textContent = '搜索到 ' + mems.length + ' / ' + allMemories.length + ' 条';
 }
 
 async function saveMem(id) {
