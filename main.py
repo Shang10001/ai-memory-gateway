@@ -717,10 +717,7 @@ async function loadMemories() {
 
 function fmtTime(s) {
     if (!s) return '-';
-    var d = new Date(s.endsWith('Z') ? s : s + 'Z');
-    if (isNaN(d)) return s.slice(0, 19).replace('T', ' ');
-    var pad = function(n) { return String(n).padStart(2, '0'); };
-    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    return s;
 }
 
 function renderTable(mems) {
@@ -857,9 +854,13 @@ async def api_get_memories():
     if not MEMORY_ENABLED:
         return {"error": "记忆系统未启用"}
     memories = await get_all_memories_detail()
+    tz_offset = timezone(timedelta(hours=TIMEZONE_HOURS))
     for m in memories:
         if m.get("created_at"):
-            m["created_at"] = str(m["created_at"])
+            dt = m["created_at"]
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            m["created_at"] = dt.astimezone(tz_offset).strftime("%Y-%m-%d %H:%M:%S")
     return {"memories": memories}
 
 
