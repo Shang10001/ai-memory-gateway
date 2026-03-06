@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制项目文件
 COPY . .
 
-# ClawCloud Run 会自动分配端口到 PORT 环境变量
+# 端口（Render 等平台会通过 PORT 环境变量分配）
 # 默认 8000
 ENV PORT=8000
 
