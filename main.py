@@ -394,13 +394,20 @@ async def chat_completions(request: Request):
         print(f"⚡ 强制开启流式传输（FORCE_STREAM=true）")
     
     # 注入推理参数（解决客户端走网关时不带reasoning参数的问题）
-    # Claude/OpenAI 和 Google Gemini OpenAI兼容端点都支持 reasoning_effort
-    # 注意：Gemini 3 Pro 不支持 medium，只支持 low/high
-    if REASONING_EFFORT and "reasoning_effort" not in body:
+    if REASONING_EFFORT:
+        # 统一用 reasoning_effort（Claude/OpenAI/Google Gemini OpenAI兼容端点都支持）
+        # 先删除客户端可能已带的值，确保用我们配置的
+        body.pop("reasoning_effort", None)
+        body.pop("google", None)
         body["reasoning_effort"] = REASONING_EFFORT
         print(f"🧠 注入推理参数: reasoning_effort={REASONING_EFFORT}")
     
     print(f"📡 请求: model={model}, stream={is_stream}, memory={'on' if MEMORY_ENABLED else 'off'}", flush=True)
+    
+    # 调试：打印请求体中的推理相关字段
+    debug_keys = {k: v for k, v in body.items() if k in ('reasoning_effort', 'google', 'reasoning')}
+    if debug_keys:
+        print(f"📡 推理字段: {debug_keys}", flush=True)
     
     if is_stream:
         return StreamingResponse(
