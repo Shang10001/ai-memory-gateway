@@ -99,11 +99,11 @@ Give your AI long-term memory. A lightweight proxy gateway that adds a memory la
 
 **3. 重新部署**
 
-部署后访问 `https://你的网关地址/manage/memories`，能正常打开管理页面就说明数据库连接成功。
+部署后访问 `https://你的网关地址/dashboard`，能正常打开管理页面就说明数据库连接成功。
 
 **4. 导入预置记忆（可选）**
 
-**方式一（推荐，不用碰代码）：** 写一个 `.txt` 文件，每行一条你想让 AI 知道的信息，然后打开 `https://你的网关地址/import/memories`，在"纯文本导入"标签页上传文件，系统会自动评估每条记忆的重要程度并导入。也可以勾选"跳过自动评分"节省 API 额度，之后在管理页面手动调整权重。
+**方式一（推荐，不用碰代码）：** 写一个 `.txt` 文件，每行一条你想让 AI 知道的信息，然后打开 `https://你的网关地址/dashboard`，在「导入记忆」页面选择「纯文本导入」上传文件，系统会自动评估每条记忆的重要程度并导入。也可以勾选"跳过自动评分"节省 API 额度，之后在「记忆管理」页面手动调整权重。
 
 **方式二（代码方式，开发者用）：**
 1. 复制 `seed_memories_example.py` 为 `seed_memories.py`
@@ -112,7 +112,7 @@ Give your AI long-term memory. A lightweight proxy gateway that adds a memory la
 
 **5. 管理记忆（可选）**
 
-打开 `https://你的网关地址/manage/memories` 可以查看所有记忆，支持搜索、编辑内容、调整权重、单条删除和批量删除。
+打开 `https://你的网关地址/dashboard` 可以查看所有记忆，支持搜索、编辑内容、调整权重、单条删除和批量删除，以及导入/导出备份。
 
 ### 第三阶段：关闭记忆（应急）
 
@@ -129,6 +129,12 @@ ai-memory-gateway/
 ├── seed_memories_example.py   # 预置记忆示例
 ├── requirements.txt           # Python 依赖
 ├── Dockerfile                 # 容器配置
+├── templates/                 # 页面模板（Dashboard 界面）
+│   ├── dashboard.html         # 主控制台页面
+│   └── ...
+├── static/                    # 静态资源
+│   ├── css/                   # 样式文件
+│   └── js/                    # 前端脚本
 ├── LICENSE                    # MIT 许可证
 └── README.md                  # 本文件
 ```
@@ -140,9 +146,7 @@ ai-memory-gateway/
 | `/` | GET | 健康检查，查看网关状态 |
 | `/v1/chat/completions` | POST | 核心转发接口（OpenAI 兼容） |
 | `/v1/models` | GET | 模型列表 |
-| `/import/memories` | GET/POST | 记忆导入页面（支持纯文本自动评分 / JSON备份恢复） |
-| `/manage/memories` | GET | 记忆管理页面（查看、搜索、编辑、删除） |
-| `/export/memories` | GET | 导出所有记忆为 JSON（备份/迁移） |
+| `/dashboard` | GET | 记忆管理控制台（管理、导入、导出一体化界面） |
 | `/import/seed-memories` | GET | 执行预置记忆导入（开发者用） |
 
 ## 🌐 支持的 LLM 服务商
@@ -185,7 +189,7 @@ A: 每次最多注入 15 条记忆（可调），不会无限增长地消耗 tok
 A: Render 免费层支持 Web Service + PostgreSQL，网关资源消耗很低，够用（注意免费 PostgreSQL 有 90 天期限）。也可以用 Neon 或 Supabase 的免费 PostgreSQL 作为长期方案。LLM API 费用另算（推荐 OpenRouter，按量付费）。
 
 **Q: 怎么备份记忆？换平台会丢数据吗？**
-A: 访问 `https://你的网关地址/export/memories` 导出所有记忆的 JSON，建议定期备份。迁移到新平台后，浏览器打开 `https://新网关地址/import/memories`，在"JSON 备份恢复"标签页上传导出的文件即可。
+A: 打开 `https://你的网关地址/dashboard`，在「导出备份」页面下载所有记忆的 JSON，建议定期备份。迁移到新平台后，在「导入记忆」页面选择「JSON 备份恢复」上传导出的文件即可。
 
 **Q: 不会写代码能搞吗？**
 A: 能。这个项目的第一个部署者就是不会写代码的——代码是 AI 写的，部署是她自己看文档搞定的。

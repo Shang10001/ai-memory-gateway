@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Gateway</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">🧠</div>
+                <span class="logo-text">Memory Gateway</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-section="manage">
+                    <span class="nav-icon">📝</span>
+                    <span class="nav-label">记忆管理</span>
+                </a>
+                <a href="#" class="nav-item" data-section="import">
+                    <span class="nav-icon">📥</span>
+                    <span class="nav-label">导入记忆</span>
+                </a>
+                <a href="#" class="nav-item" data-section="export">
+                    <span class="nav-icon">📤</span>
+                    <span class="nav-label">导出备份</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="https://github.com/garan0613/ai-memory-gateway" target="_blank" class="nav-item">
+                    <span class="nav-icon">⭐</span>
+                    <span class="nav-label">GitHub</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 记忆管理 Section -->
+            <section id="section-manage" class="section active">
+                <div class="section-header">
+                    <h1>记忆管理</h1>
+                    <p class="section-desc">查看、编辑、删除已存储的记忆</p>
+                </div>
+
+                <div class="card toolbar-card">
+                    <div class="toolbar">
+                        <input type="text" id="searchBox" class="search-input" placeholder="搜索记忆..." oninput="filterAndSort()">
+                        <div class="toolbar-group">
+                            <input type="date" id="dateFilter" class="date-input" onchange="filterAndSort()" title="按日期筛选">
+                            <button class="btn btn-icon" onclick="clearDateFilter()" title="清除日期">✕</button>
+                        </div>
+                        <select id="sortSelect" class="select-input" onchange="filterAndSort()">
+                            <option value="id-desc">ID 从新到旧</option>
+                            <option value="id-asc">ID 从旧到新</option>
+                            <option value="imp-desc">权重 从高到低</option>
+                            <option value="imp-asc">权重 从低到高</option>
+                        </select>
+                        <div class="toolbar-actions">
+                            <button class="btn btn-primary" onclick="batchSave()">批量保存</button>
+                            <button class="btn btn-danger" onclick="batchDelete()">批量删除</button>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="selectAll" onchange="toggleAll()">
+                                <span>全选</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="manage-msg" class="msg-container"></div>
+                
+                <div class="stats-bar">
+                    <span id="stats">加载中...</span>
+                </div>
+
+                <div class="card table-card">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th class="col-check"><input type="checkbox" id="selectAllHead" onchange="toggleAll()"></th>
+                                <th class="col-id">ID</th>
+                                <th class="col-content">内容</th>
+                                <th class="col-importance">权重</th>
+                                <th class="col-source">来源</th>
+                                <th class="col-time">时间</th>
+                                <th class="col-actions">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 导入记忆 Section -->
+            <section id="section-import" class="section">
+                <div class="section-header">
+                    <h1>导入记忆</h1>
+                    <p class="section-desc">从文件或文本导入新的记忆</p>
+                </div>
+
+                <div class="card">
+                    <div class="tabs">
+                        <button class="tab active" data-tab="text">纯文本导入</button>
+                        <button class="tab" data-tab="json">JSON 备份恢复</button>
+                    </div>
+
+                    <!-- 纯文本导入 -->
+                    <div id="tab-text" class="tab-panel active">
+                        <div class="form-group">
+                            <label class="form-label">上传 .txt 文件（每行一条记忆）</label>
+                            <input type="file" id="txtFile" accept=".txt" class="file-input">
+                        </div>
+                        <div class="divider"><span>或者直接输入</span></div>
+                        <div class="form-group">
+                            <textarea id="txtInput" class="textarea" rows="8" placeholder="每行一条记忆，例如：&#10;用户的名字叫小花&#10;用户喜欢吃火锅&#10;用户养了一只狗叫豆豆"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="skipScore">
+                                <span>跳过自动评分（所有记忆默认权重 5，不消耗 API 额度）</span>
+                            </label>
+                        </div>
+                        <button class="btn btn-primary btn-lg" onclick="doTextImport()">开始导入</button>
+                    </div>
+
+                    <!-- JSON 导入 -->
+                    <div id="tab-json" class="tab-panel">
+                        <div class="form-group">
+                            <label class="form-label">上传从导出功能保存的 .json 文件</label>
+                            <input type="file" id="jsonFile" accept=".json" class="file-input">
+                        </div>
+                        <div class="divider"><span>或者直接粘贴</span></div>
+                        <div class="form-group">
+                            <textarea id="jsonInput" class="textarea" rows="8" placeholder="粘贴导出的 JSON"></textarea>
+                        </div>
+                        <button class="btn btn-secondary" onclick="previewJson()">预览内容</button>
+                        <div id="jsonPreview" class="preview-box"></div>
+                    </div>
+                </div>
+
+                <div id="import-result" class="msg-container"></div>
+            </section>
+
+            <!-- 导出备份 Section -->
+            <section id="section-export" class="section">
+                <div class="section-header">
+                    <h1>导出备份</h1>
+                    <p class="section-desc">将记忆导出为 JSON 文件，用于备份或迁移</p>
+                </div>
+
+                <div class="card export-card">
+                    <div class="export-info">
+                        <div class="export-icon">💾</div>
+                        <div class="export-text">
+                            <h3>导出全部记忆</h3>
+                            <p>将所有记忆导出为 JSON 格式，包含完整的元数据（权重、来源、时间等）</p>
+                        </div>
+                    </div>
+                    <div class="export-stats" id="export-stats">
+                        正在统计...
+                    </div>
+                    <button class="btn btn-primary btn-lg" onclick="doExport()">下载 JSON 备份</button>
+                </div>
+
+                <div class="card tips-card">
+                    <h4>💡 小贴士</h4>
+                    <ul>
+                        <li>导出的 JSON 可以通过「导入记忆 → JSON 备份恢复」功能导入</li>
+                        <li>建议定期备份，以防数据丢失</li>
+                        <li>导出文件可用于迁移到其他部署实例</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
