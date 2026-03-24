@@ -55,7 +55,7 @@ MAX_MEMORIES_INJECT = int(os.getenv("MAX_MEMORIES_INJECT", "15"))
 # 记忆提取间隔（0 = 禁用自动提取，1 = 每轮提取，N = 每 N 轮提取一次）
 MEMORY_EXTRACT_INTERVAL = int(os.getenv("MEMORY_EXTRACT_INTERVAL", "1"))
 
-# 最低分数线（低于此分数的记忆将被抛弃，默认是 5）
+# 最低分数线（低于此分数的记忆将被无情抛弃，默认是 5，你可以设为 6 或更高）
 MIN_SCORE_THRESHOLD = int(os.getenv("MIN_SCORE_THRESHOLD", "5"))
 
 # 时区偏移（小时），用于记忆注入时的日期显示，默认 UTC+8
@@ -206,9 +206,6 @@ async def process_memories_background(session_id: str, user_msg: str, assistant_
     - 1: 每轮提取（默认）
     - N: 每 N 轮提取一次
     对话记录始终保存，不受间隔影响。
-    
-    context_messages: 客户端发来的原始对话上下文（不含system prompt），
-                      用于让提取模型从完整上下文中提取记忆。
     """
     global _round_counter
     
@@ -236,10 +233,7 @@ async def process_memories_background(session_id: str, user_msg: str, assistant_
         existing_contents = [r["content"] for r in existing]
         
         # 4. 构建用于提取的消息列表
-        #    截取最近 MEMORY_EXTRACT_INTERVAL 轮对话（每轮=user+assistant共2条）
-        #    而非发送完整上下文，省token
         if context_messages:
-            # 截取最近N轮（interval×2条），加上最新的assistant回复
             tail_count = MEMORY_EXTRACT_INTERVAL * 2
             recent_msgs = list(context_messages)[-tail_count:] if len(context_messages) > tail_count else list(context_messages)
             messages_for_extraction = recent_msgs + [
@@ -263,12 +257,12 @@ async def process_memories_background(session_id: str, user_msg: str, assistant_
             "bug", "debug", "端口", "网关",
         ]
         
-       filtered_memories = []
+        filtered_memories = []
         for mem in new_memories:
             content = mem.get("content", "")
             importance = mem.get("importance", 5)
             
-            # 第一道关卡：拦截不够深刻的低分记忆（这就是那个阈值发挥作用的地方！）
+            # 第一道关卡：拦截不够深刻的低分记忆！终于加上啦！
             if importance < MIN_SCORE_THRESHOLD:
                 print(f"🛡️ 拦截低分片段 ({importance}分 < 阈值{MIN_SCORE_THRESHOLD}分): {content}")
                 continue
@@ -317,6 +311,7 @@ async def health_check():
         "memory_enabled": MEMORY_ENABLED,
         "memory_count": memory_count,
         "memory_extract_interval": MEMORY_EXTRACT_INTERVAL,
+        "min_score_threshold": MIN_SCORE_THRESHOLD,
     }
 
 
@@ -734,6 +729,7 @@ if __name__ == "__main__":
     print(f"🔗 API 地址：{API_BASE_URL}")
     print(f"🧠 记忆系统：{'开启' if MEMORY_ENABLED else '关闭'}")
     print(f"🔄 记忆提取间隔：{'禁用' if MEMORY_EXTRACT_INTERVAL == 0 else '每轮提取' if MEMORY_EXTRACT_INTERVAL == 1 else f'每 {MEMORY_EXTRACT_INTERVAL} 轮提取一次'}")
+    print(f"🛡️ 最低记忆分数线：{MIN_SCORE_THRESHOLD} 分")
     if FORCE_STREAM:
         print(f"⚡ 强制流式传输：开启")
     if REASONING_EFFORT:
