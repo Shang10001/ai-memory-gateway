@@ -55,6 +55,9 @@ MAX_MEMORIES_INJECT = int(os.getenv("MAX_MEMORIES_INJECT", "15"))
 # 记忆提取间隔（0 = 禁用自动提取，1 = 每轮提取，N = 每 N 轮提取一次）
 MEMORY_EXTRACT_INTERVAL = int(os.getenv("MEMORY_EXTRACT_INTERVAL", "1"))
 
+# 最低分数线（低于此分数的记忆将被抛弃，默认是 5）
+MIN_SCORE_THRESHOLD = int(os.getenv("MIN_SCORE_THRESHOLD", "5"))
+
 # 时区偏移（小时），用于记忆注入时的日期显示，默认 UTC+8
 TIMEZONE_HOURS = int(os.getenv("TIMEZONE_HOURS", "8"))
 
@@ -260,12 +263,21 @@ async def process_memories_background(session_id: str, user_msg: str, assistant_
             "bug", "debug", "端口", "网关",
         ]
         
-        filtered_memories = []
+       filtered_memories = []
         for mem in new_memories:
-            content = mem["content"]
+            content = mem.get("content", "")
+            importance = mem.get("importance", 5)
+            
+            # 第一道关卡：拦截不够深刻的低分记忆（这就是那个阈值发挥作用的地方！）
+            if importance < MIN_SCORE_THRESHOLD:
+                print(f"🛡️ 拦截低分片段 ({importance}分 < 阈值{MIN_SCORE_THRESHOLD}分): {content}")
+                continue
+
+            # 第二道关卡：过滤掉带有机器感的 meta 词汇
             if any(kw in content for kw in META_BLACKLIST):
                 print(f"🚫 过滤掉meta记忆: {content[:60]}...")
                 continue
+                
             filtered_memories.append(mem)
         
         for mem in filtered_memories:
