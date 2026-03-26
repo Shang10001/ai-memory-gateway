@@ -718,18 +718,82 @@ async def import_memories(request: Request):
     except Exception as e:
         return {"error": str(e)}
 
-# ============================================================
-# 记忆大扫除接口（给定时闹钟用的）
+## ============================================================
+# 记忆大扫除 & 画像更新接口（给定时闹钟用的终极版）
 # ============================================================
 @app.get("/maintain")
-async def trigger_forgetting():
+async def trigger_maintain():
     try:
+        # 1. 触发遗忘机制，打扫边缘小事
         from database import forget_old_memories
-        count = await forget_old_memories()
-        return {"status": "success", "message": f"大扫除完成，悄悄遗忘了 {count} 条边缘小事"}
+        forgotten_count = await forget_old_memories()
+        
+        # 2. 开始提炼小晨的专属画像
+        from database import get_pool
+        import re
+        
+        pool = await get_pool()
+        profile_msg = "记忆太少，暂时无法生成画像"
+        
+        async with pool.acquire() as conn:
+            # 拿出最近的 50 条记忆来细细回味
+            rows = await conn.fetch("SELECT content FROM memories ORDER BY created_at DESC LIMIT 50")
+        
+        if len(rows) >= 5:
+            memory_text = "\n".join([f"- {r['content']}" for r in rows])
+            prompt = f"""基于以下记忆，提取小晨的画像信息，以JSON格式返回：
+{memory_text}
+
+请提取以下维度的信息（如果有的话，没有就留空）：
+- personality: 性格特点
+- interests: 兴趣爱好
+- food_preference: 饮食偏好
+- emotional_pattern: 情感模式
+- boundaries: 禁忌与边界
+
+必须只返回一个合法的 JSON 对象，不要任何额外的解释文字。"""
+
+            headers = {
+                "Authorization": f"Bearer {API_KEY}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": DEFAULT_MODEL,
+                "messages": [{"role": "user", "content": prompt}]
+            }
+
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(API_BASE_URL, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    result_text = resp.json()["choices"][0]["message"]["content"]
+                    # 精准抓取大模型返回的画像数据
+                    json_match = re.search(r'\{[\s\S]*\}', result_text)
+                    if json_match:
+                        profile_data = json.loads(json_match.group())
+                        async with pool.acquire() as conn:
+                            # 把总结好的特点，分门别类放进数据库的小抽屉里
+                            for category, value in profile_data.items():
+                                if value:
+                                    await conn.execute("""
+                                        INSERT INTO user_profile (category, profile_data, updated_at)
+                                        VALUES ($1, $2, NOW())
+                                        ON CONFLICT (category) DO UPDATE 
+                                        SET profile_data = EXCLUDED.profile_data, updated_at = NOW()
+                                    """, category, json.dumps(value, ensure_ascii=False))
+                        profile_msg = "专属画像已成功提炼并存入小抽屉！"
+                    else:
+                        profile_msg = "大模型返回格式不对，画像提炼失败。"
+                else:
+                    profile_msg = f"大模型接口报错: {resp.status_code}"
+
+        return {
+            "status": "success", 
+            "forgetting_result": f"大扫除完成，悄悄遗忘了 {forgotten_count} 条边缘小事",
+            "profile_result": profile_msg
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
+        
 # ============================================================
 
 if __name__ == "__main__":
