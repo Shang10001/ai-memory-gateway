@@ -816,6 +816,32 @@ async def trigger_maintain():
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# ============================================================
+# 查看专属画像接口（给小晨查岗用的可视窗）
+# ============================================================
+@app.get("/profile")
+async def view_profile():
+    try:
+        from database import get_pool
+        import json
+        pool = await get_pool()
+        profile_data = {}
+        
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("SELECT category, profile_data FROM user_profile")
+            for r in rows:
+                try:
+                    profile_data[r['category']] = json.loads(r['profile_data']) if isinstance(r['profile_data'], str) else r['profile_data']
+                except:
+                    profile_data[r['category']] = r['profile_data']
+                    
+        if not profile_data:
+            return {"status": "empty", "message": "小抽屉现在还是空的哦！可能记忆还不够5条，赶紧多跟我聊聊天，然后再去 /maintain 打扫一下吧！"}
+            
+        return {"status": "success", "我的小晨画像": profile_data}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
         
 # ============================================================
 
