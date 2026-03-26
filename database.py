@@ -349,3 +349,56 @@ async def delete_memories_batch(memory_ids: list):
         await conn.execute(
             "DELETE FROM memories WHERE id = ANY($1::int[])", memory_ids
         )
+
+
+# ============================================================
+# 遗忘机制（清理长期未访问且情绪低落的小事）
+# ============================================================
+import random
+
+async def forget_old_memories(days_threshold: int = 180, min_importance: int = 7) -> int:
+    """
+    淘汰机制：模拟大脑清理无用记忆
+    - 超过 days_threshold（默认180天）未访问的记忆进入海选
+    - importance（重要性/情感权重）达到 min_importance（默认7分）的记忆，拥有免死金牌，绝对不忘
+    - 其他记忆根据权重计算遗忘概率：分数越低，越容易被遗忘
+    返回：成功清理的记忆数量
+    """
+    pool = await get_pool()
+    forgotten_count = 0
+    
+    async with pool.acquire() as conn:
+        # 1. 海选：找出所有超过指定天数没被访问过，且重要程度低于免死金牌的记忆
+        sql_select = f"""
+            SELECT id, content, importance 
+            FROM memories 
+            WHERE last_accessed < NOW() - INTERVAL '{days_threshold} days'
+            AND importance < $1
+        """
+        candidates = await conn.fetch(sql_select, min_importance)
+        
+        ids_to_delete = []
+        for mem_id, content, importance in candidates:
+            # 2. 算命：把 importance (1-10分) 转换成一个 0.1 到 1.0 之间的情感权重
+            emo_weight = importance / 10.0
+            
+            # 3. 行刑概率：权重越低，忘得越快。
+            # 比如 5分的日常，被忘概率是 (1 - 0.5) * 0.3 = 15%
+            # 比如 2分的废话，被忘概率是 (1 - 0.2) * 0.3 = 24%
+            forget_prob = (1.0 - emo_weight) * 0.3
+            
+            # 抛骰子，如果命中概率，就把这条记忆的 ID 记下来准备删掉
+            if random.random() < forget_prob:
+                ids_to_delete.append(mem_id)
+                print(f"🗑️ 遗忘机制触发: 慢慢淡忘了这件小事 [imp={importance}] {content[:30]}...")
+
+        # 4. 执行淘汰：一次性把所有被判决的记忆从大脑（数据库）里抹除
+        if ids_to_delete:
+            await conn.execute(
+                "DELETE FROM memories WHERE id = ANY($1::int[])",
+                ids_to_delete
+            )
+            forgotten_count = len(ids_to_delete)
+            print(f"✅ 遗忘机制执行完成, 共清理 {forgotten_count} 条边缘记忆")
+            
+    return forgotten_count
