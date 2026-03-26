@@ -75,6 +75,15 @@ async def init_tables():
                 last_accessed   TIMESTAMPTZ DEFAULT NOW()
             );
         """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_profile (
+                id              SERIAL PRIMARY KEY,
+                category        TEXT UNIQUE NOT NULL,
+                profile_data    JSONB NOT NULL,
+                updated_at      TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
         
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_memories_fts 
