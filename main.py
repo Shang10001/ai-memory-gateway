@@ -718,6 +718,17 @@ async def import_memories(request: Request):
     except Exception as e:
         return {"error": str(e)}
 
+# ============================================================
+# 记忆大扫除接口（给定时闹钟用的）
+# ============================================================
+@app.get("/maintain")
+async def trigger_forgetting():
+    try:
+        from database import forget_old_memories
+        count = await forget_old_memories()
+        return {"status": "success", "message": f"大扫除完成，悄悄遗忘了 {count} 条边缘小事"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # ============================================================
 
@@ -735,15 +746,3 @@ if __name__ == "__main__":
     if REASONING_EFFORT:
         print(f"🧠 推理参数注入：{REASONING_EFFORT}")
     uvicorn.run(app, host="0.0.0.0", port=PORT)
-
-# ============================================================
-# 记忆大扫除接口（给定时闹钟用的）
-# ============================================================
-@app.get("/maintain")
-async def trigger_forgetting():
-    try:
-        from database import forget_old_memories
-        count = await forget_old_memories()
-        return {"status": "success", "message": f"大扫除完成，悄悄遗忘了 {count} 条边缘小事"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
