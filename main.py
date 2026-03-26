@@ -140,39 +140,62 @@ async def build_system_prompt_with_memories(user_message: str) -> str:
     """
     构建带记忆的 system prompt
     1. 用用户消息搜索相关记忆
-    2. 格式化成文本拼接到人设后面
+    2. 取出用户画像
+    3. 格式化成文本拼接到人设后面
     """
     if not MEMORY_ENABLED:
         return SYSTEM_PROMPT
     
     try:
+        # 1. 开抽屉：拿出专属画像
+        from database import get_pool
+        import json
+        pool = await get_pool()
+        profile_text = ""
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("SELECT category, profile_data FROM user_profile")
+            if rows:
+                profile_lines = []
+                for r in rows:
+                    try:
+                        data = json.loads(r['profile_data']) if isinstance(r['profile_data'], str) else r['profile_data']
+                        if isinstance(data, dict):
+                            for k, v in data.items():
+                                profile_lines.append(f"- {k}: {v}")
+                        else:
+                            profile_lines.append(f"- {r['category']}: {data}")
+                    except:
+                        pass
+                if profile_lines:
+                    profile_text = "\n【我对小晨的深层认知与画像】\n" + "\n".join(profile_lines) + "\n"
+
+        # 2. 翻日记：搜索相关零碎记忆
         memories = await search_memories(user_message, limit=MAX_MEMORIES_INJECT)
         
-        if not memories:
+        memory_text = ""
+        if memories:
+            memory_lines = []
+            for mem in memories:
+                date_str = ""
+                if mem.get("created_at"):
+                    try:
+                        utc_str = str(mem['created_at'])[:19]
+                        utc_dt = datetime.strptime(utc_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                        local_dt = utc_dt + timedelta(hours=TIMEZONE_HOURS)
+                        date_str = f"[{local_dt.strftime('%Y-%m-%d')}] "
+                    except:
+                        date_str = f"[{str(mem['created_at'])[:10]}] "
+                memory_lines.append(f"- {date_str}{mem['content']}")
+            memory_text = "\n【当前话题相关的过往记忆】\n" + "\n".join(memory_lines) + "\n"
+
+        # 如果画像和记忆都是空的，直接返回纯人设
+        if not profile_text and not memory_text:
             return SYSTEM_PROMPT
         
-        # 格式化记忆文本（带日期，帮助模型判断新旧）
-        memory_lines = []
-        for mem in memories:
-            date_str = ""
-            if mem.get("created_at"):
-                try:
-                    utc_str = str(mem['created_at'])[:19]
-                    utc_dt = datetime.strptime(utc_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-                    local_dt = utc_dt + timedelta(hours=TIMEZONE_HOURS)
-                    date_str = f"[{local_dt.strftime('%Y-%m-%d')}] "
-                except:
-                    date_str = f"[{str(mem['created_at'])[:10]}] "
-            memory_lines.append(f"- {date_str}{mem['content']}")
-        memory_text = "\n".join(memory_lines)
-        
         enhanced_prompt = f"""{SYSTEM_PROMPT}
-
-【从过往对话中检索到的相关记忆】
-{memory_text}
-
+{profile_text}{memory_text}
 # 记忆应用
-- 像朋友般自然运用这些记忆，不刻意展示
+- 像同伴般自然运用这些记忆，不刻意展示
 - 仅在相关话题出现时引用，避免主动提及
 - 对重要信息（如健康、日期、约定）保持一致性
 - 新信息与记忆冲突时，以新信息为准
@@ -185,11 +208,11 @@ async def build_system_prompt_with_memories(user_message: str) -> str:
 
 记忆是丰富对话的工具，而非对话焦点。"""
         
-        print(f"📚 注入了 {len(memories)} 条相关记忆")
+        print(f"📚 注入了画像和 {len(memories) if memories else 0} 条相关记忆")
         return enhanced_prompt
         
     except Exception as e:
-        print(f"⚠️  记忆检索失败: {e}，使用纯人设")
+        print(f"⚠️  记忆/画像检索失败: {e}，使用纯人设")
         return SYSTEM_PROMPT
 
 
